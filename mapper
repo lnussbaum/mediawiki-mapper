@@ -10,7 +10,7 @@ FACTORS=true
 MAXDEPTH=4
 
 # set of pages to start from
-START_PAGES = [ 'Grid5000:Home' ]
+#START_PAGES = [ 'Grid5000:Home' ]
 START_PAGES = ['Network_reconfiguration_tutorial']
 
 #### END OF CONFIG
