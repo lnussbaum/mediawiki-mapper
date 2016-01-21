@@ -127,6 +127,7 @@ end
 
 ls.uniq!
 
+$not_be_reached_list = []
 $warned = []
 nodes = START_PAGES
 (1..MAXDEPTH).each do |n|
@@ -136,7 +137,7 @@ nodes = START_PAGES
     next if DONT_LOOK_FURTHER.match(l['from']) or MUST_NOT_BE_REACHED.match(l['from'])
     if MUST_NOT_BE_REACHED.match(l['to'])
       if not MUST_NOT_BE_REACHED_OVERRIDES.match("#{l['from']} #{l['to']}")
-        STDERR.puts "Should not be reached: #{l['from']} #{l['to']} -- https://www.grid5000.fr/mediawiki/index.php/#{l['from']}"
+        $not_be_reached_list << [l['from'], l['to']]
       else
         next
       end
@@ -207,4 +208,9 @@ end
 STDERR.puts "## Pages that are Portal|User, but that are in \"must not be reached\""
 portaluser.select { |e| MUST_NOT_BE_REACHED.match(e) }.uniq.sort.each do |node|
   STDERR.puts "https://www.grid5000.fr/mediawiki/index.php/#{node}"
+end
+
+STDERR.puts "## Pages that should not be reached:"
+$not_be_reached_list.uniq.sort { |a, b| a[1] <=> b[1] }.each do |e|
+  STDERR.puts "#{e[0]} #{e[1]} -- https://www.grid5000.fr/mediawiki/index.php/#{e[0]}"
 end
