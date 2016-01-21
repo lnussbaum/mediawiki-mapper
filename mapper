@@ -160,7 +160,7 @@ nodes = START_PAGES
   end
   newnodes.uniq!
   nodes = newnodes
-#  STDERR.puts "after iter #{n}, #nodes=#{nodes.length}"
+  STDERR.puts "after iter #{n}, #nodes=#{nodes.length}"
 end
 
 puts <<EOF
