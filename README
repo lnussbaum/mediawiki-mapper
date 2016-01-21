@@ -1,0 +1,21 @@
+This is a simple script to map a Mediawiki instance.
+
+There's quite a lot of custom stuff for Grid'5000 built-in.
+
+Usage:
+======
+1. Create a tunnel to your MySQL instance (if needed): ssh -L 3306:localhost:3306 g5kadmin@web.g5k
+
+2. Edit the script and configure it
+3. Run it with: ./mapper > links
+4. Generate pdf with: dot -T pdf -o dot.pdf links
+
+or 3+4 in one go: ./mapper | dot -Tpdf -o dot.pdf
+
+Additional files:
+=================
+* dont-look-further.in: list of pages that are linked to, but that should be considered "dead ends" while exploring.
+Typically, they are pages that are only kept for historical purposes. They are displayed in orange in the graph.
+* must-not-be-reached.in: list of pages that should not be reached (deprecated pages, internal pages, for example). They trigger a warning at execution, and are displayed in red in the graph.
+* must-not-be-reached-overrides.in: pairs of pages (from, to) where "to" is part of must-not-be-reached, but where the link should not trigger a warning.
+* not-portal-user-but-ok.in: by default, pages that are not part of the users portal (not public), but are reached, raise a warning. This file lists pages where the warning should not be displayed.

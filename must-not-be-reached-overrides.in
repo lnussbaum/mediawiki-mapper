@@ -1,0 +1,29 @@
+Team User:.*
+Grid5000:Alumni User:.*
+.*:People User:.*
+Mailing_lists User:(Dmargery|Lnussbaum|Pmorillo|Any)
+Run_MPI_On_Grid'5000 Grid_computation# pointer to old tutorial
+Advanced_OAR OAR2_properties# OK
+Advanced_OAR OAR_properties# OK
+IMAGE Environment_Management
+IMAGE Kadeploy
+IMAGE Prepost
+IMAGE LDAP_client
+IMAGE Network_interlink
+IMAGE New_maintenance_strategy_of_reference_images
+Reference_Repository Network_Description
+Reference_Repository OAR_properties_2.0
+Security_model User:Dmargery
+Security_model User:Sbadia
+IMAGE CT-63
+OpenStack_devstack User:Sbadia
+TCP_bandwidth_tuning Network_interlink
+OpenStack_deployment User:Sbadia
+G5kchecks_Administration G5k-checks_old
+Computer RSA_upgrade_summary
+Computer RSA
+IPMI RSA
+Adding_hardware_support Kadeploy
+Virtual_Network_Configuration Network_interlink
+Node_qualification G5k-checks_old
+Xen_tools_deployment User:Dmargery

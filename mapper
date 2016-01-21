@@ -1,0 +1,210 @@
+#!/usr/bin/ruby
+
+# host, user, password, dbname, dbport
+DB = [ "127.0.0.1", "root", "", "mediawiki_prod", 3306 ]
+
+# factor user pages, sites pages and images pages into a single one? (see fpn method below)
+FACTORS=true 
+
+# number of iterations to discover new pages
+MAXDEPTH=4
+
+# set of pages to start from
+START_PAGES = [ 'Grid5000:Home' ]
+START_PAGES = ['Network_reconfiguration_tutorial']
+
+#### END OF CONFIG
+
+DONT_LOOK_FURTHER = Regexp.union(IO::readlines('dont-look-further.in').map { |l| /^#{l.chomp}$/ })
+MUST_NOT_BE_REACHED = Regexp.union(IO::readlines('must-not-be-reached.in').map { |l| /^#{l.chomp}$/ })
+MUST_NOT_BE_REACHED_OVERRIDES = Regexp.union(IO::readlines('must-not-be-reached-overrides.in').map { |l| /^#{l.chomp.split('#')[0]}$/ })
+NOT_PORTAL_USER_BUT_OK = Regexp.union(IO::readlines('not-portal-user-but-ok.in').map { |l| /^#{l.chomp}$/ })
+
+
+require 'mysql'
+require 'pp'
+
+$categs = {
+  0 => "",
+  2 => "User",
+  4 => "Grid5000",
+  14 => 'Category', 
+  -1 => 'Special',
+  100 => "Orsay",
+  101 => "Orsay_Talk",
+  102 => "Grenoble",
+  103 => "Grenoble_Talk",
+  104 => "Lyon",
+  105 => "Lyon_Talk",
+  106 => "Rennes",
+  107 => "Rennes_Talk",
+  108 => "Sophia",
+  109 => "Sophia_Talk",
+  110 => "Bordeaux",
+  111 => "Bordeaux_Talk",
+  112 => "Lille",
+  113 => "Lille_Talk",
+  114 => "Nancy",
+  115 => "Nancy_Talk",
+  116 => "Toulouse",
+  117 => "Toulouse_Talk",
+  118 => "PortoAlegre",
+  119 => "PortoAlegre_Talk",
+  120 => "Luxembourg",
+  121 => "Luxembourg_Talk",
+  122 => "Internals",
+  123 => "Internals_Talk",
+  124 => "Reims",
+  125 => "Reims_Talk",
+  126 => "Nantes",
+  127 => "Nantes_Talk",
+}
+
+dbh = Mysql.real_connect(*DB)
+# see http://www.mediawiki.org/wiki/Manual:Namespace
+BLNS = [6, 10, 1, 12, 8, 3, 10, 5]
+ns_main = 0
+res = dbh.query("SELECT
+    page_id AS id,
+    page_namespace AS namespace,
+    page_title AS title
+    FROM page")
+pages = {}
+while row = res.fetch_hash
+  pages[row['id']] = row
+end
+
+res = dbh.query("SELECT pl_from as pl_from, pl_namespace as namespace, pl_title as title from pagelinks")
+
+# get the full page name
+def fpn(ns, page)
+  #STDERR.puts [ns, page].inspect
+  if FACTORS and (ns >= 102 and ns != 118) and ['Home','Hardware', 'Storage', 'External_access', 'Network','People'].include?(page.gsub(/^.*:(.*)$/, '\1'))
+    return "SITE:"+page.gsub(/^.*:(.*)$/, '\1')
+  elsif page =~ /^(Lenny-|Etch-|Sid-|Squeeze-|Wheezy-|Debian-x64-|Jessie-)/
+    return "IMAGE"
+  end
+  if ns != 0
+    if not $categs.has_key?(ns)
+      page = page
+    else
+      page = $categs[ns]+':'+page
+    end
+  end
+  if FACTORS and page =~ /^User:/
+    return "User:Any"
+  else
+    return page
+  end
+end
+
+allpages = pages.values.map { |r| fpn(r['namespace'].to_i, r['title']) }
+
+links = []
+while row = res.fetch_hash
+  next if BLNS.include?(pages[row['pl_from']]['namespace'].to_i)
+  next if BLNS.include?(row['namespace'].to_i)
+  ns = row['namespace'].to_i
+#  next if ns >= 100 # exclude site pages
+  links << {'from_ns' => pages[row['pl_from']]['namespace'].to_i, 'from' => pages[row['pl_from']]['title'],
+            'to_ns' => row['namespace'].to_i, 'to' => row['title']}
+end
+#pp links
+
+ls = []
+
+# 'Category:Portal:Admin', 
+['Category:Portal:User', 'Grid5000:Get_an_account', 'Category:Portal:Tutorial', 'Status', 'FAQ', 'Grid5000:UserCharter', 'Grid5000:Software'].each do |p|
+  ls << {'from'=>'Grid5000:Home', 'to'=>p}
+end
+
+links.each do |l|
+  next if l['from_ns'] == 0 and l['from'] =~ /^(Reims|Nantes):/
+  next if l['to_ns'] == 0 and l['to'] =~ /^(Reims|Nantes):/
+  ls << { 'from' => fpn(l['from_ns'], l['from']),
+          'to' => fpn(l['to_ns'], l['to'])}
+end
+
+ls.uniq!
+
+$warned = []
+nodes = START_PAGES
+(1..MAXDEPTH).each do |n|
+  newnodes = nodes.dup
+  ls.each do |l|
+    next if not nodes.include?(l['from'])
+    next if DONT_LOOK_FURTHER.match(l['from']) or MUST_NOT_BE_REACHED.match(l['from'])
+    if MUST_NOT_BE_REACHED.match(l['to'])
+      if not MUST_NOT_BE_REACHED_OVERRIDES.match("#{l['from']} #{l['to']}")
+        STDERR.puts "Should not be reached: #{l['from']} #{l['to']} -- https://www.grid5000.fr/mediawiki/index.php/#{l['from']}"
+      else
+        next
+      end
+    end
+    if not allpages.include?(l['to'])
+        STDERR.puts "Broken link: #{l['from']} #{l['to']} -- https://www.grid5000.fr/mediawiki/index.php/#{l['from']}"
+    end
+    newnodes << l['to']
+  end
+  newnodes.uniq!
+  nodes = newnodes
+#  STDERR.puts "after iter #{n}, #nodes=#{nodes.length}"
+end
+
+# get public pages
+res = dbh.query("select page_namespace,page_title from categorylinks,page where cl_to='Portal:User' and cl_from=page_id")
+portaluser = []
+while row = res.fetch_hash
+  next if BLNS.include?(row['page_namespace'].to_i)
+  portaluser << fpn(row['page_namespace'].to_i, row['page_title'])
+end
+
+puts <<EOF
+digraph wiki {
+center=true;
+splines="true";
+ratio="compress";
+epsilon="0.01";
+EOF
+ls.uniq!
+
+nodes.each do |n|
+  if MUST_NOT_BE_REACHED.match(n)
+    puts "\"#{n}\" [style=filled,fillcolor=red];"
+  elsif DONT_LOOK_FURTHER.match(n)
+    puts "\"#{n}\" [style=filled,fillcolor=orange];"
+  elsif portaluser.include?(n)
+    puts "\"#{n}\" [style=filled,fillcolor=green];"
+  end
+end
+ls.each do |l|
+  from = l['from']
+  to = l['to']
+  next if not nodes.include?(from) or not nodes.include?(to)
+  next if from == to
+  puts "\"#{from}\" -> \"#{to}\""
+  if portaluser.include?(from) and not portaluser.include?(to) and not NOT_PORTAL_USER_BUT_OK =~ "#{from} #{to}"
+    STDERR.puts "Portal:User links to !Portal:User: #{from} #{to}"
+  end
+end
+#  next if from =~ /^(Tasks-|CT-|PS-|PD-|Squeeze-|Lenny-|Author:)/
+#  next if to =~ /^(Tasks-|CT-|PS-|PD-|Squeeze-|Lenny-|Author:)/
+puts "}"
+
+# analyze portal:users
+if MAXDEPTH > 20
+  STDERR.puts "## Pages that are Portal|User, but not linked"
+  (portaluser - nodes).uniq.sort.each do |node|
+    STDERR.puts "https://www.grid5000.fr/mediawiki/index.php/#{node}"
+  end
+end
+
+STDERR.puts "## Pages that were reached, but are not Portal|User"
+(nodes - portaluser).sort.uniq.each do |node|
+  STDERR.puts "https://www.grid5000.fr/mediawiki/index.php/#{node}"
+end
+
+STDERR.puts "## Pages that are Portal|User, but that are in \"must not be reached\""
+portaluser.select { |e| MUST_NOT_BE_REACHED.match(e) }.uniq.sort.each do |node|
+  STDERR.puts "https://www.grid5000.fr/mediawiki/index.php/#{node}"
+end
